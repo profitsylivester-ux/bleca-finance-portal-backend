@@ -1,6 +1,7 @@
 import express from 'express'
 import Transaction from '../models/Transaction.js'
 import { authMiddleware, requireCEO } from '../middleware/auth.js'
+import { logActivity } from '../utils/activity.js'
 
 const router = express.Router()
 
@@ -88,6 +89,7 @@ router.post('/', authMiddleware, async (req, res) => {
     })
 
     const populated = await transaction.populate('createdBy', 'name email')
+    await logActivity(req.user, 'Transaction created', `${transaction.description} · ${transaction.amount} TZS`)
 
     res.status(201).json(populated)
   } catch (error) {
@@ -114,6 +116,7 @@ router.put('/:id/approve', authMiddleware, requireCEO, async (req, res) => {
     transaction.approvalDate = new Date()
 
     await transaction.save()
+    await logActivity(req.user, 'Transaction approved', `${transaction.description} · ${transaction.amount} TZS`)
 
     const populated = await transaction
       .populate('createdBy', 'name email')
@@ -143,9 +146,15 @@ router.put('/:id/reject', authMiddleware, requireCEO, async (req, res) => {
     transaction.status = 'rejected'
     transaction.approvedBy = req.user.userId
     transaction.approvalDate = new Date()
-    transaction.rejectionReason = reason || 'No reason provided'
+    const rejectionReason = typeof reason === 'string' ? reason.trim() : ''
+    transaction.rejectionReason = rejectionReason || 'No reason provided'
 
     await transaction.save()
+    await logActivity(
+      req.user,
+      'Transaction rejected',
+      `${transaction.description} · Reason: ${transaction.rejectionReason}`
+    )
 
     const populated = await transaction
       .populate('createdBy', 'name email')

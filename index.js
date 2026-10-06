@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url'
 import authRoutes from './routes/auth.js'
 import transactionRoutes from './routes/transactions.js'
 import documentRoutes from './routes/documents.js'
+import activityRoutes from './routes/activity.js'
 
 dotenv.config()
 
@@ -37,6 +38,7 @@ app.get('/', (req, res) => {
 app.use('/auth', authRoutes)
 app.use('/transactions', transactionRoutes)
 app.use('/documents', documentRoutes)
+app.use('/activity', activityRoutes)
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`)

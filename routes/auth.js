@@ -60,4 +60,43 @@ router.get('/me', authMiddleware, async (req, res) => {
   })
 })
 
+router.put('/password', authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body
+
+    if (
+      typeof currentPassword !== 'string' ||
+      typeof newPassword !== 'string' ||
+      !currentPassword ||
+      !newPassword
+    ) {
+      return res.status(400).json({ error: 'Current and new passwords are required' })
+    }
+
+    if (newPassword.length < 8 || !/\d/.test(newPassword)) {
+      return res.status(400).json({
+        error: 'New password must be at least 8 characters and include a number',
+      })
+    }
+
+    const user = await User.findById(req.user.userId)
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const currentPasswordMatches = await bcrypt.compare(currentPassword, user.password)
+    if (!currentPasswordMatches) {
+      return res.status(401).json({ error: 'Current password is incorrect' })
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10)
+    await user.save()
+
+    res.json({ message: 'Password updated' })
+  } catch (error) {
+    console.error('Password update error:', error)
+    res.status(500).json({ error: 'Failed to update password' })
+  }
+})
+
 export default router
