@@ -1,9 +1,17 @@
 import express from 'express'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import Transaction from '../models/Transaction.js'
+import Document from '../models/Document.js'
 import { authMiddleware, requireCEO } from '../middleware/auth.js'
 import { logActivity } from '../utils/activity.js'
 
 const router = express.Router()
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const uploadDir = path.join(__dirname, '..', 'uploads')
 
 // GET all transactions (auth required)
 router.get('/', authMiddleware, async (req, res) => {
@@ -272,6 +280,46 @@ router.put('/:id/reject', authMiddleware, requireCEO, async (req, res) => {
   } catch (error) {
     console.error('Reject error:', error)
     res.status(500).json({ error: 'Failed to reject' })
+  }
+})
+
+// DELETE a transaction and its generated PDF documents (CEO only)
+router.delete('/:id', authMiddleware, requireCEO, async (req, res) => {
+  try {
+    const transaction = await Transaction.findById(req.params.id)
+
+    if (!transaction) {
+      return res.status(404).json({ error: 'Transaction not found' })
+    }
+
+    // Remove any documents that were generated from this transaction
+    const linkedDocs = await Document.find({ transactionId: transaction._id })
+
+    for (const doc of linkedDocs) {
+      const filePath = path.join(uploadDir, path.basename(doc.filename))
+      try {
+        await fs.promises.unlink(filePath)
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error
+      }
+    }
+
+    await Document.deleteMany({ transactionId: transaction._id })
+    await transaction.deleteOne()
+
+    await logActivity(
+      req.user,
+      'Transaction deleted',
+      `${transaction.description} · ${transaction.amount} ${transaction.currency || 'TZS'}`
+    )
+
+    res.json({
+      message: 'Transaction deleted',
+      removedDocuments: linkedDocs.length,
+    })
+  } catch (error) {
+    console.error('Delete error:', error)
+    res.status(500).json({ error: 'Failed to delete transaction' })
   }
 })
 
